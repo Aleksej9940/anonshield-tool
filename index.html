@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none';">
+<title>AnonShield — Anonimizzatore locale</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body {
+    background: #0d1117;
+    color: #c9d1d9;
+    font: 13px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    padding: 14px;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 1px solid #30363d;
+  }
+  header h1 { font-size: 16px; font-weight: 700; }
+  header h1 span { color: #3fb950; }
+  header .sub { font-size: 11px; color: #8b949e; }
+  .panes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 720px) {
+    .panes { grid-template-columns: 1fr; }
+  }
+  section {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 12px;
+  }
+  h2 {
+    font-size: 12px; color: #8b949e; text-transform: uppercase;
+    letter-spacing: .05em; margin-bottom: 8px;
+  }
+  textarea {
+    width: 100%;
+    background: #010409;
+    color: #c9d1d9;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 8px;
+    font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    resize: both;
+    min-width: 120px;
+    max-width: 100%;
+    min-height: 90px;
+  }
+  textarea:focus { outline: none; border-color: #1f6feb; }
+  .row { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+  button {
+    padding: 7px 12px;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    background: #21262d;
+    color: #c9d1d9;
+    cursor: pointer;
+    font: inherit;
+  }
+  button:hover:not(:disabled) { background: #30363d; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  button.primary:hover:not(:disabled) { background: #388bfd; }
+  button.danger { border-color: #f85149; color: #f85149; background: transparent; }
+  .stats { font: 11px ui-monospace, monospace; color: #8b949e; margin-top: 6px; min-height: 1em; }
+  details { margin-top: 16px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 0 12px; }
+  summary { cursor: pointer; color: #8b949e; padding: 10px 0; font-weight: 600; }
+  .set { padding: 4px 0 12px; display: flex; flex-direction: column; gap: 8px; }
+  fieldset {
+    border: 1px solid #30363d; border-radius: 6px; padding: 6px 10px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px;
+  }
+  legend { font-size: 11px; color: #8b949e; padding: 0 4px; }
+  .set label { display: block; }
+  footer { margin-top: 16px; font-size: 11px; color: #484f58; text-align: center; }
+  .warn {
+    margin-top: 8px; font-size: 11px; color: #d29922;
+    border: 1px solid #9e6a03; border-radius: 6px; padding: 6px 10px;
+    background: rgba(210,153,34,.08);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>&#x1F6E1; AnonShield <span>&#9679;</span></h1>
+    <div class="sub">Pseudonimizzazione locale — nessun dato lascia il browser</div>
+  </div>
+</header>
+
+<main>
+  <div class="panes">
+    <section>
+      <h2>1 &middot; Anonimizza il prompt</h2>
+      <textarea id="in-prompt" rows="6" placeholder="Incolla qui il testo da inviare all'AI (log, alert, ticket...)"></textarea>
+      <div class="row">
+        <button id="btn-anon" class="primary">Anonimizza</button>
+        <button id="btn-copy-anon" disabled>Copia</button>
+      </div>
+      <textarea id="out-prompt" rows="6" readonly placeholder="Testo anonimizzato, pronto da incollare nella chat"></textarea>
+      <div id="stats" class="stats"></div>
+    </section>
+
+    <section>
+      <h2>2 &middot; Ripristina la risposta</h2>
+      <textarea id="in-resp" rows="6" placeholder="Incolla qui la risposta dell'AI"></textarea>
+      <div class="row">
+        <button id="btn-restore" class="primary">Ripristina</button>
+        <button id="btn-copy-resp" disabled>Copia</button>
+      </div>
+      <textarea id="out-resp" rows="6" readonly placeholder="Risposta con i tuoi dati veri ripristinati"></textarea>
+    </section>
+  </div>
+
+  <details>
+    <summary>Impostazioni &amp; mapping</summary>
+    <div class="set">
+      <fieldset><legend>Tipi di dato</legend>
+        <label><input type="checkbox" data-t="url"> URL</label>
+        <label><input type="checkbox" data-t="email"> Email</label>
+        <label><input type="checkbox" data-t="ipv4"> IPv4</label>
+        <label><input type="checkbox" data-t="ipv6"> IPv6</label>
+        <label><input type="checkbox" data-t="mac"> MAC</label>
+        <label><input type="checkbox" data-t="hostname"> Hostname (.local/.corp/...)</label>
+        <label><input type="checkbox" data-t="domain"> Domini</label>
+        <label><input type="checkbox" data-t="custom"> Termini &amp; regex personalizzate</label>
+      </fieldset>
+      <label>Termini sensibili (uno per riga, es. SRV-MILANO-01)</label>
+      <textarea id="terms" rows="3" placeholder="SRV-MILANO-01&#10;Acme Corp"></textarea>
+      <label>Regex personalizzate (formato NOME=REGEX per riga)</label>
+      <textarea id="regexes" rows="2" placeholder="SRV=SRV-[A-Z]+-\d+&#10;TICKET=INC-\d{6}"></textarea>
+      <div class="row">
+        <button id="btn-export">Esporta mapping</button>
+        <button id="btn-import">Importa</button>
+        <button id="btn-clear" class="danger">Svuota mapping</button>
+      </div>
+      <input type="file" id="file-import" accept="application/json" style="display:none">
+      <div class="warn">
+        Il mapping è volatile (sparisce alla chiusura della tab). Esportalo se ti serve a lungo termine.
+        Non incollare password, token o chiavi: non sono coperti dai pattern.
+      </div>
+    </div>
+  </details>
+
+  <footer>AnonShield — pseudonimizzazione, non anonimizzazione. Il contesto può tradire i dati mascherati.</footer>
+</main>
+
+<script>
+/* ============================================================
+   Motore di anonimizzazione (puro, nessuna API browser)
+   ============================================================ */
+(function (root) {
+  'use strict';
+
+  function escapeRe(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  var TLDs = ['com','net','org','edu','gov','mil','int','io','ai','app','dev','info','biz','me','co',
+    'xyz','tech','cloud','online','site','store','top','pro','name','tv','cc','us','eu',
+    'it','de','fr','es','uk','ch','nl','be','at','se','no','dk','fi','pl','cz','pt','gr','ie',
+    'lu','is','li','ro','hu','sk','si','hr','ee','lv','lt','bg','mt','cy','rs','ua','ru','tr',
+    'ca','au','nz','jp','kr','cn','in','br','mx','ar','cl','za','ae','il','sg','hk','tw','th','vn','id','my','ph'];
+
+  var BUILTIN = [
+    { id: 'url', label: 'URL', regex: /\bhttps?:\/\/[^\s"'<>)\]]+/gi },
+    { id: 'email', label: 'MAIL', regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}\b/g },
+    { id: 'ipv4', label: 'IP',
+      regex: /\b\d{1,3}(?:\.\d{1,3}){3}\b/g,
+      validate: function (m) { return m.split('.').every(function (o) { return +o <= 255; }); } },
+    { id: 'mac', label: 'MAC', regex: /\b[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}\b/g },
+    { id: 'ipv6', label: 'IP6',
+      regex: /\b(?:[0-9A-Fa-f]{0,4}:){2,7}[0-9A-Fa-f]{0,4}\b/g,
+      validate: function (m) {
+        if (/^[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}$/.test(m)) return false;
+        return m.indexOf('::') !== -1 || m.split(':').some(function (g) { return g.length >= 3; });
+      } },
+    { id: 'hostname', label: 'HOST',
+      regex: /\b[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:local|lan|corp|internal|intra|home|localdomain|arpa)\b/gi },
+    { id: 'domain', label: 'DOM',
+      regex: new RegExp('\\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(?:' + TLDs.join('|') + ')\\b', 'gi') }
+  ];
+
+  function detect(text) {
+    return /__[A-Z][A-Z0-9]*_\d+__/.test(String(text));
+  }
+
+  function anonymize(text, opts) {
+    opts = opts || {};
+    var mapping = opts.mapping || {};
+    var counters = opts.counters || {};
+    var toggles = opts.toggles || {};
+    var stats = {};
+    var out = String(text);
+
+    function on(id) { return toggles[id] !== false; }
+
+    function alloc(label) {
+      counters[label] = (counters[label] || 0) + 1;
+      return '__' + label + '_' + counters[label] + '__';
+    }
+
+    function apply(regex, label, validate) {
+      out = out.replace(regex, function (m) {
+        if (validate && !validate(m)) return m;
+        var ph = alloc(label);
+        mapping[ph] = m;
+        stats[label] = (stats[label] || 0) + 1;
+        return ph;
+      });
+    }
+
+    if (on('custom')) {
+      var terms = (opts.customTerms || [])
+        .filter(function (t) { return t && t.trim(); })
+        .map(function (t) { return t.trim(); })
+        .sort(function (a, b) { return b.length - a.length; });
+      for (var i = 0; i < terms.length; i++) {
+        try { apply(new RegExp('\\b' + escapeRe(terms[i]) + '\\b', 'gi'), 'TERM'); } catch (e) {}
+      }
+      var cre = opts.customRegexes || [];
+      for (var j = 0; j < cre.length; j++) {
+        var name = String(cre[j].name || 'RX').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) || 'RX';
+        try { apply(new RegExp(cre[j].pattern, 'gi'), name); } catch (e) {}
+      }
+    }
+
+    for (var k = 0; k < BUILTIN.length; k++) {
+      var b = BUILTIN[k];
+      if (on(b.id)) apply(b.regex, b.label, b.validate);
+    }
+
+    return { text: out, stats: stats, changed: out !== String(text) };
+  }
+
+  function restore(text, mapping) {
+    var out = String(text);
+    var keys = Object.keys(mapping || {}).sort(function (a, b) { return b.length - a.length; });
+    for (var i = 0; i < keys.length; i++) out = out.split(keys[i]).join(mapping[keys[i]]);
+    return out;
+  }
+
+  root.ANON = { anonymize: anonymize, restore: restore, detect: detect, escapeRe: escapeRe };
+})(window);
+
+/* ============================================================
+   Stato e persistenza (sessionStorage = volatile, localStorage = impostazioni)
+   ============================================================ */
+(function () {
+  'use strict';
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var DEFAULTS = {
+    toggles: { url: true, email: true, ipv4: true, ipv6: true, mac: true, hostname: true, domain: true, custom: true },
+    customTerms: [],
+    customRegexes: []
+  };
+
+  var STATE_KEY = 'anonshield.state';
+  var SETTINGS_KEY = 'anonshield.settings';
+
+  function loadState() {
+    try {
+      var raw = sessionStorage.getItem(STATE_KEY);
+      if (!raw) return { mapping: {}, counters: {} };
+      var s = JSON.parse(raw);
+      if (s && s.mapping && s.counters) return s;
+    } catch (e) {}
+    return { mapping: {}, counters: {} };
+  }
+
+  function saveState(s) {
+    try { sessionStorage.setItem(STATE_KEY, JSON.stringify(s)); } catch (e) {}
+  }
+
+  function loadSettings() {
+    try {
+      var raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return JSON.parse(JSON.stringify(DEFAULTS));
+      var s = JSON.parse(raw);
+      return {
+        toggles: Object.assign({}, DEFAULTS.toggles, s.toggles || {}),
+        customTerms: Array.isArray(s.customTerms) ? s.customTerms : [],
+        customRegexes: Array.isArray(s.customRegexes) ? s.customRegexes : []
+      };
+    } catch (e) {
+      return JSON.parse(JSON.stringify(DEFAULTS));
+    }
+  }
+
+  function saveSettings(s) {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (e) {}
+  }
+
+  /* Copia con fallback execCommand per contesti file:// o HTTP non sicuri */
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function () { return legacyCopy(text); });
+    }
+    return Promise.resolve(legacyCopy(text));
+  }
+
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  function flash(btn, label) {
+    var old = btn.textContent;
+    btn.textContent = label;
+    setTimeout(function () { btn.textContent = old; }, 1200);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var state = loadState();
+    var settings = loadSettings();
+
+    // riempi i controlli
+    document.querySelectorAll('[data-t]').forEach(function (cb) {
+      cb.checked = settings.toggles[cb.dataset.t] !== false;
+    });
+    $('terms').value = (settings.customTerms || []).join('\n');
+    $('regexes').value = (settings.customRegexes || []).map(function (r) {
+      return r.name + '=' + r.pattern;
+    }).join('\n');
+
+    function collect() {
+      document.querySelectorAll('[data-t]').forEach(function (cb) {
+        settings.toggles[cb.dataset.t] = cb.checked;
+      });
+      settings.customTerms = $('terms').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+      settings.customRegexes = $('regexes').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean)
+        .map(function (line) {
+          var i = line.indexOf('=');
+          return i > 0 ? { name: line.slice(0, i).trim(), pattern: line.slice(i + 1).trim() } : null;
+        }).filter(Boolean);
+      saveSettings(settings);
+    }
+    document.querySelectorAll('[data-t]').forEach(function (cb) { cb.addEventListener('change', collect); });
+    ['terms', 'regexes'].forEach(function (id) { $(id).addEventListener('change', collect); });
+
+    // anonimizza
+    $('btn-anon').addEventListener('click', function () {
+      var text = $('in-prompt').value;
+      if (!text.trim()) return;
+      var r = ANON.anonymize(text, {
+        mapping: state.mapping,
+        counters: state.counters,
+        toggles: settings.toggles,
+        customTerms: settings.customTerms,
+        customRegexes: settings.customRegexes
+      });
+      saveState(state);
+      $('out-prompt').value = r.text;
+      $('btn-copy-anon').disabled = false;
+      var parts = Object.keys(r.stats).map(function (k) { return k + ' ×' + r.stats[k]; });
+      $('stats').textContent = r.changed
+        ? 'Sostituiti: ' + parts.join(', ')
+        : 'Nessun dato sensibile trovato (controlla termini/regex personalizzate).';
+    });
+    $('btn-copy-anon').addEventListener('click', function () {
+      copyText($('out-prompt').value).then(function (ok) { flash(this, ok ? 'Copiato!' : 'Errore'); }.bind(this));
+    });
+
+    // ripristina
+    $('btn-restore').addEventListener('click', function () {
+      var text = $('in-resp').value;
+      if (!text.trim()) return;
+      $('out-resp').value = ANON.restore(text, state.mapping);
+      $('btn-copy-resp').disabled = false;
+    });
+    $('btn-copy-resp').addEventListener('click', function () {
+      copyText($('out-resp').value).then(function (ok) { flash(this, ok ? 'Copiato!' : 'Errore'); }.bind(this));
+    });
+
+    // mapping
+    $('btn-clear').addEventListener('click', function () {
+      state = { mapping: {}, counters: {} };
+      saveState(state);
+      $('stats').textContent = 'Mapping svuotato.';
+    });
+
+    $('btn-export').addEventListener('click', function () {
+      var blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'anonshield-mapping.json';
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    });
+
+    $('btn-import').addEventListener('click', function () { $('file-import').click(); });
+    $('file-import').addEventListener('change', function () {
+      var f = this.files[0];
+      if (!f) return;
+      var rd = new FileReader();
+      var input = this;
+      rd.onload = function () {
+        try {
+          var parsed = JSON.parse(rd.result);
+          if (!parsed || typeof parsed !== 'object' || !parsed.mapping || !parsed.counters) {
+            $('stats').textContent = 'File non valido (schema atteso: { mapping, counters }).';
+          } else {
+            var keys = Object.keys(parsed.mapping);
+            var ok = keys.every(function (k) { return typeof parsed.mapping[k] === 'string'; });
+            if (!ok) {
+              $('stats').textContent = 'File non valido (valori del mapping non stringa).';
+            } else {
+              state = { mapping: parsed.mapping, counters: parsed.counters };
+              saveState(state);
+              $('stats').textContent = 'Mapping importato (' + keys.length + ' voci).';
+            }
+          }
+        } catch (e) {
+          $('stats').textContent = 'File non valido (JSON non parsabile).';
+        }
+        input.value = '';
+      };
+      rd.readAsText(f);
+    });
+  });
+})();
+</script>
+</body>
+</html>
